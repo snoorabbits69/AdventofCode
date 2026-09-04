@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const MaxShapes = 6
@@ -26,7 +27,19 @@ func hasSufficientArea(t Tree) bool {
 	return area >= total*9
 }
 
+func solve(trees []Tree) (uint32, uint32) {
+	var areaFeasibleCount uint32
+	for _, t := range trees {
+		if hasSufficientArea(t) {
+			areaFeasibleCount++
+		}
+	}
+	return areaFeasibleCount, 0
+}
+
 func main() {
+	start := time.Now()
+	const iters = 10000
 	f, err := os.Open("input.txt")
 	if err != nil {
 		panic(err)
@@ -52,14 +65,19 @@ func main() {
 		panic(err)
 	}
 
-	areaFeasibleCount := uint32(0)
-	for _, t := range trees {
-		if hasSufficientArea(t) {
-			areaFeasibleCount++
-		}
+	var part1, part2 uint32
+	processStart := time.Now()
+	for i := 0; i < iters; i++ {
+		part1, part2 = solve(trees)
 	}
-
-	fmt.Println(areaFeasibleCount)
+	processTime := time.Since(processStart)
+	totalTime := time.Since(start)
+	elapsedUs := float64(processTime.Nanoseconds()) / 1000.0
+	fmt.Printf("Total: %.2f microseconds\n", elapsedUs)
+	fmt.Printf("Average: %.4f microseconds\n", elapsedUs/float64(iters))
+	fmt.Printf("Total time:        %dns\n", totalTime.Nanoseconds())
+	fmt.Println("part1", part1)
+	fmt.Println("part2", part2)
 }
 
 func parseTreeLine(line string) (Tree, bool) {
