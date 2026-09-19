@@ -3,6 +3,7 @@ package main
 import (
 	_ "embed"
 	"fmt"
+	"time"
 )
 
 //go:embed input.txt
@@ -103,6 +104,19 @@ func solve() (int64, int64) {
 }
 
 func main() {
-	part1, part2 := solve()
-	fmt.Println(part1, part2)
+	start := time.Now()
+	const iters = 10000
+	var part1, part2 int64
+	processStart := time.Now()
+	for i := 0; i < iters; i++ {
+		part1, part2 = solve()
+	}
+	processTime := time.Since(processStart)
+	totalTime := time.Since(start)
+	elapsedUs := float64(processTime.Nanoseconds()) / 1000.0
+	fmt.Printf("Total: %.2f microseconds\n", elapsedUs)
+	fmt.Printf("Average: %.4f microseconds\n", elapsedUs/float64(iters))
+	fmt.Printf("Total time:        %dns\n", totalTime.Nanoseconds())
+	fmt.Println("part1", part1)
+	fmt.Println("part2", part2)
 }

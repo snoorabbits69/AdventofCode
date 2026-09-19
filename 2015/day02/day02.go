@@ -1,10 +1,13 @@
 package main
 
 import (
+	_ "embed"
 	"fmt"
-	"os"
 	"time"
 )
+
+//go:embed input.txt
+var data []byte
 
 func min(a, b, c int) int {
 	m := a
@@ -81,31 +84,18 @@ func solve(data []byte) (int, int) {
 
 func main() {
 	start := time.Now()
-	data, err := os.ReadFile("input.txt")
-	if err != nil {
-		panic(err)
-	}
-	readTime := time.Since(start)
-
-	var part1, part2 int
-	for i := 0; i < 100; i++ {
-		part1, part2 = solve(data)
-	}
-
 	const iters = 10000
+	var part1, part2 int
 	processStart := time.Now()
 	for i := 0; i < iters; i++ {
 		part1, part2 = solve(data)
 	}
 	processTime := time.Since(processStart)
 	totalTime := time.Since(start)
-
 	elapsedUs := float64(processTime.Nanoseconds()) / 1000.0
-
-	fmt.Println("Answer for part1:", part1)
-	fmt.Println("Answer for part2:", part2)
-	fmt.Println()
 	fmt.Printf("Total: %.2f microseconds\n", elapsedUs)
 	fmt.Printf("Average: %.4f microseconds\n", elapsedUs/float64(iters))
 	fmt.Printf("Total time:        %dns\n", totalTime.Nanoseconds())
+	fmt.Println("part1", part1)
+	fmt.Println("part2", part2)
 }

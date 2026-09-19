@@ -3,6 +3,7 @@ package main
 import (
 	_ "embed"
 	"fmt"
+	"time"
 )
 
 //go:embed input.txt
@@ -129,17 +130,26 @@ func solve(graph Graph) (int64, int64) {
 	cost := buildCostMatrix(graph)
 	part1 := heldKarp(cost, len(graph.Adj))
 
-	fromID := graph.getID("me")
+	ids := make(map[string]int, len(graph.IDs)+1)
+	for k, v := range graph.IDs {
+		ids[k] = v
+	}
+	adj := make([][]Edge, len(graph.Adj))
+	copy(adj, graph.Adj)
 
-	for _, value := range graph.IDs {
-		graph.Adj[fromID] = append(graph.Adj[fromID], Edge{
-			To:     value,
-			Weight: 0,
-		})
+	g2 := Graph{IDs: ids, Names: append([]string{}, graph.Names...), Adj: adj}
+
+	fromID := g2.getID("me")
+
+	for name, value := range g2.IDs {
+		if name == "me" {
+			continue
+		}
+		g2.Adj[fromID] = append(g2.Adj[fromID], Edge{To: value, Weight: 0})
 	}
 
 	cost = extendCostMatrix(cost)
-	part2 := heldKarp(cost, len(graph.Adj))
+	part2 := heldKarp(cost, len(g2.Adj))
 
 	return part1, part2
 }
@@ -214,9 +224,20 @@ func parseNumber(i *int) int64 {
 }
 
 func main() {
+	start := time.Now()
+	const iters = 10000
 	graph := parse()
-	part1, part2 := solve(graph)
-	fmt.Println("Part 1 ", part1)
-	fmt.Println("Part 2 ", part2)
-
+	var part1, part2 int64
+	processStart := time.Now()
+	for i := 0; i < iters; i++ {
+		part1, part2 = solve(graph)
+	}
+	processTime := time.Since(processStart)
+	totalTime := time.Since(start)
+	elapsedUs := float64(processTime.Nanoseconds()) / 1000.0
+	fmt.Printf("Total: %.2f microseconds\n", elapsedUs)
+	fmt.Printf("Average: %.4f microseconds\n", elapsedUs/float64(iters))
+	fmt.Printf("Total time:        %dns\n", totalTime.Nanoseconds())
+	fmt.Println("part1", part1)
+	fmt.Println("part2", part2)
 }

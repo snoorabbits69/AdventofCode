@@ -1,204 +1,3 @@
-// package main
-
-// import (
-// 	_ "embed"
-// 	"fmt"
-// 	"time"
-// )
-
-// type actionType uint8
-
-// const (
-// 	actOn actionType = iota
-// 	actOff
-// 	actToggle
-// )
-
-// type Action struct {
-// 	typ    actionType
-// 	r1, c1 int
-// 	r2, c2 int
-// }
-
-// //go:embed input.txt
-// var data []byte
-
-// const (
-// 	W          = 1000
-// 	N          = W * W
-// 	lenToggle  = 7
-// 	lenTurnOn  = 8
-// 	lenTurnOff = 9
-// 	lenThrough = 9
-// 	iters      = 1000
-// )
-
-// func main() {
-// 	start := time.Now()
-
-// 	actions := parseActions(data)
-
-// 	grid1 := make([]bool, N)
-// 	grid2 := make([]int, N)
-
-// 	var part1, part2 int
-
-// 	// Warmup
-// 	for i := 0; i < 100; i++ {
-// 		part1,part2=solve(actions,grid1,grid2)
-// 	}
-
-// 	benchStart := time.Now()
-// 	for i := 0; i < iters; i++ {
-// 				part1,part2=solve(actions,grid1,grid2)
-
-// 	}
-// 	benchTime := time.Since(benchStart)
-
-// 	totalTime := time.Since(start)
-
-// 	fmt.Println("solution of part1:", part1)
-// 	fmt.Println("solution of part2:", part2)
-// 	fmt.Println()
-
-// 	fmt.Printf("Total bench time: %d microseconds\n", benchTime.Microseconds())
-// 	avgUs := float64(benchTime.Nanoseconds()) / 1_000.0 / float64(iters)
-// 	fmt.Printf("Average per iter: %.4f microseconds\n", avgUs)
-// 	fmt.Printf("Total time: %d microseconds\n", totalTime.Microseconds())
-// }
-
-
-
-
-
-
-
-
-
-
-
-
-// func solve(acts []Action, grid1 []bool,grid2 []int) (int,int) {
-// 	clear(grid1)
-// 	clear(grid2)
-
-// 	var idx int
-
-// 	for _, a := range acts {
-// 		for r := a.r1; r <= a.r2; r++ {
-// 			base := r * W 
-
-// 			switch a.typ {
-// 			case actOn:
-// 				for c := a.c1; c <= a.c2; c++ {
-// 					idx=base+c
-// 					grid1[idx] = true
-// 					grid2[idx]++
-// 				}
-
-// 			case actOff:
-// 				for c := a.c1; c <= a.c2; c++ {
-// 					idx=base+c
-// 					grid1[base+c] = false
-// if grid2[idx]>0{
-// 	grid2[idx]--
-// }
-
-// 				}
-
-// 			case actToggle:
-// 				for c := a.c1; c <= a.c2; c++ {
-// 					idx := base + c
-// 					grid1[idx] = !grid1[idx]
-// 					grid2[idx]+=2
-// 				}
-// 			}
-// 		}
-// 	}
-
-// 	lit := 0
-// 	for _, v := range grid1 {
-// 		if v {
-// 			lit++
-// 		}
-// 	}
-
-// 	total := 0
-// 	for _, v := range grid2 {
-// 		total += v
-// 	}
-
-// 	return lit,total
-// }
-
-
-
-
-// func parseActions(b []byte) []Action {
-// 	actions := make([]Action, 0, 300)
-// 	i := 0
-
-// 	for i < len(b) {
-// 		for i < len(b) && (b[i] == '\n' || b[i] == '\r') {
-// 			i++
-// 		}
-// 		if i >= len(b) {
-// 			break
-// 		}
-
-// 		var typ actionType
-// 		if i+6 < len(b) && b[i] == 't' && b[i+1] == 'o' && b[i+2] == 'g' {
-// 			typ = actToggle
-// 			i += lenToggle
-// 		} else if i+7 < len(b) && b[i] == 't' && b[i+5] == 'o' && b[i+6] == 'n' {
-// 			typ = actOn
-// 			i += lenTurnOn
-// 		} else {
-// 			typ = actOff
-// 			i += lenTurnOff
-// 		}
-
-// 		r1 := parseUint( &i)
-// 		i++
-// 		c1 := parseUint(&i)
-// 		i += lenThrough
-// 		r2 := parseUint( &i)
-// 		i++
-// 		c2 := parseUint(&i)
-
-// 		for i < len(b) && b[i] != '\n' {
-// 			i++
-// 		}
-
-// 		actions = append(actions, Action{
-// 			typ: typ,
-// 			r1:  r1,
-// 			c1:  c1,
-// 			r2:  r2,
-// 			c2:  c2,
-// 		})
-// 	}
-
-// 	return actions
-// }
-
-// func parseUint(i *int) int {
-// 	n := 0
-// 	idx := *i
-// 	for idx < len(data) {
-// 		c := data[idx]
-// 		if c < '0' || c > '9' {
-// 			break
-// 		}
-// 		n = n*10 + int(c-'0')
-// 		idx++
-// 	}
-// 	*i = idx
-// 	return n
-// }
-
-
-
 package main
 
 import (
@@ -212,9 +11,8 @@ import (
 var data []byte
 
 const (
-	W     = 1000
-	N     = W * W
-	iters = 10
+	W = 1000
+	N = W * W
 )
 
 var (
@@ -245,6 +43,10 @@ func solve(input []byte) (int, int) {
 
 	i := 0
 	for i < len(input) && input[i] == 't' {
+		if i+6 >= len(input) {
+			break
+		}
+
 		op := uint8(2)
 		if input[i+6] == 'n' {
 			op = 0
@@ -256,29 +58,42 @@ func solve(input []byte) (int, int) {
 			i += 7
 		}
 
+		if i >= len(input) {
+			break
+		}
+
 		x1 := 0
-		for input[i] != ',' {
+		for i < len(input) && input[i] != ',' {
 			x1 = x1*10 + int(input[i]-'0')
 			i++
 		}
 		i++
+		if i >= len(input) {
+			break
+		}
 
 		y1 := 0
-		for input[i] != ' ' {
+		for i < len(input) && input[i] != ' ' {
 			y1 = y1*10 + int(input[i]-'0')
 			i++
 		}
 		i += 9
+		if i >= len(input) {
+			break
+		}
 
 		x2 := 0
-		for input[i] != ',' {
+		for i < len(input) && input[i] != ',' {
 			x2 = x2*10 + int(input[i]-'0')
 			i++
 		}
 		i++
+		if i > len(input) {
+			break
+		}
 
 		y2 := 0
-		for input[i] >= '0' && input[i] <= '9' {
+		for i < len(input) && input[i] >= '0' && input[i] <= '9' {
 			y2 = y2*10 + int(input[i]-'0')
 			i++
 		}
@@ -345,22 +160,54 @@ func solve(input []byte) (int, int) {
 					grid1[idx+13] = 0
 					grid1[idx+14] = 0
 					grid1[idx+15] = 0
-					if grid2[idx] > 0 { grid2[idx]-- }
-					if grid2[idx+1] > 0 { grid2[idx+1]-- }
-					if grid2[idx+2] > 0 { grid2[idx+2]-- }
-					if grid2[idx+3] > 0 { grid2[idx+3]-- }
-					if grid2[idx+4] > 0 { grid2[idx+4]-- }
-					if grid2[idx+5] > 0 { grid2[idx+5]-- }
-					if grid2[idx+6] > 0 { grid2[idx+6]-- }
-					if grid2[idx+7] > 0 { grid2[idx+7]-- }
-					if grid2[idx+8] > 0 { grid2[idx+8]-- }
-					if grid2[idx+9] > 0 { grid2[idx+9]-- }
-					if grid2[idx+10] > 0 { grid2[idx+10]-- }
-					if grid2[idx+11] > 0 { grid2[idx+11]-- }
-					if grid2[idx+12] > 0 { grid2[idx+12]-- }
-					if grid2[idx+13] > 0 { grid2[idx+13]-- }
-					if grid2[idx+14] > 0 { grid2[idx+14]-- }
-					if grid2[idx+15] > 0 { grid2[idx+15]-- }
+					if grid2[idx] > 0 {
+						grid2[idx]--
+					}
+					if grid2[idx+1] > 0 {
+						grid2[idx+1]--
+					}
+					if grid2[idx+2] > 0 {
+						grid2[idx+2]--
+					}
+					if grid2[idx+3] > 0 {
+						grid2[idx+3]--
+					}
+					if grid2[idx+4] > 0 {
+						grid2[idx+4]--
+					}
+					if grid2[idx+5] > 0 {
+						grid2[idx+5]--
+					}
+					if grid2[idx+6] > 0 {
+						grid2[idx+6]--
+					}
+					if grid2[idx+7] > 0 {
+						grid2[idx+7]--
+					}
+					if grid2[idx+8] > 0 {
+						grid2[idx+8]--
+					}
+					if grid2[idx+9] > 0 {
+						grid2[idx+9]--
+					}
+					if grid2[idx+10] > 0 {
+						grid2[idx+10]--
+					}
+					if grid2[idx+11] > 0 {
+						grid2[idx+11]--
+					}
+					if grid2[idx+12] > 0 {
+						grid2[idx+12]--
+					}
+					if grid2[idx+13] > 0 {
+						grid2[idx+13]--
+					}
+					if grid2[idx+14] > 0 {
+						grid2[idx+14]--
+					}
+					if grid2[idx+15] > 0 {
+						grid2[idx+15]--
+					}
 				} else {
 					grid1[idx] ^= 1
 					grid1[idx+1] ^= 1
@@ -422,25 +269,18 @@ func solve(input []byte) (int, int) {
 func main() {
 	_ = unsafe.Sizeof(0)
 	start := time.Now()
+	const iters = 100
 	var part1, part2 int
-
-	for i := 0; i < 10; i++ {
-		part1, part2 = solve(data)
-	}
-
-	benchStart := time.Now()
+	processStart := time.Now()
 	for i := 0; i < iters; i++ {
 		part1, part2 = solve(data)
 	}
-	benchTime := time.Since(benchStart)
+	processTime := time.Since(processStart)
 	totalTime := time.Since(start)
-
-	fmt.Println("solution of part1:", part1)
-	fmt.Println("solution of part2:", part2)
-	fmt.Println()
-	fmt.Printf("Total bench time: %d microseconds\n", benchTime.Microseconds())
-	avgUs := float64(benchTime.Nanoseconds()) / 1_000.0 / float64(iters)
-	fmt.Printf("Average per iter: %.4f microseconds\n", avgUs)
-	fmt.Printf("Total time: %d microseconds\n", totalTime.Microseconds())
+	elapsedUs := float64(processTime.Nanoseconds()) / 1000.0
+	fmt.Printf("Total: %.2f microseconds\n", elapsedUs)
+	fmt.Printf("Average: %.4f microseconds\n", elapsedUs/float64(iters))
+	fmt.Printf("Total time:        %dns\n", totalTime.Nanoseconds())
+	fmt.Println("part1", part1)
+	fmt.Println("part2", part2)
 }
-

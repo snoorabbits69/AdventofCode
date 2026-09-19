@@ -1,6 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 func charIncrement(char rune) rune {
 	if char == 'z' {
@@ -75,8 +78,20 @@ func solve(input string) (string, string) {
 }
 
 func main() {
+	start := time.Now()
+	const iters = 100
 	input := "cqjxjnds"
-	part1, part2 := solve(input)
-	fmt.Println("Part 1", part1)
-	fmt.Println("Part 2", part2)
+	var part1, part2 string
+	processStart := time.Now()
+	for i := 0; i < iters; i++ {
+		part1, part2 = solve(input)
+	}
+	processTime := time.Since(processStart)
+	totalTime := time.Since(start)
+	elapsedUs := float64(processTime.Nanoseconds()) / 1000.0
+	fmt.Printf("Total: %.2f microseconds\n", elapsedUs)
+	fmt.Printf("Average: %.4f microseconds\n", elapsedUs/float64(iters))
+	fmt.Printf("Total time:        %dns\n", totalTime.Nanoseconds())
+	fmt.Println("part1", part1)
+	fmt.Println("part2", part2)
 }

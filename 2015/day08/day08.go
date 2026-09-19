@@ -16,7 +16,7 @@ func solve() (int, int) {
 	total_code := n
 	total_char := 0
 	extra_code := 0
-	line_started :=0
+	line_started := 0
 
 	for i < n {
 		c := data[i]
@@ -24,8 +24,8 @@ func solve() (int, int) {
 		if c == '\n' {
 			total_code--
 
-			if line_started==1 {
-				extra_code += 2 
+			if line_started == 1 {
+				extra_code += 2
 				line_started = 0
 			}
 
@@ -36,7 +36,7 @@ func solve() (int, int) {
 		line_started = 1
 		if c == '"' {
 			extra_code++
-			
+
 			i++
 			continue
 		}
@@ -62,7 +62,7 @@ func solve() (int, int) {
 		i++
 	}
 
-	if line_started==1 {
+	if line_started == 1 {
 		extra_code += 2
 	}
 
@@ -71,26 +71,18 @@ func solve() (int, int) {
 
 func main() {
 	start := time.Now()
-	var part1,part2 int
-
-	for i := 0; i < 100; i++ {
-		part1,part2= solve()
-	}
-
 	const iters = 10000
-	benchStart := time.Now()
+	var part1, part2 int
+	processStart := time.Now()
 	for i := 0; i < iters; i++ {
-	part1,part2= solve()
+		part1, part2 = solve()
 	}
-	benchTime := time.Since(benchStart)
+	processTime := time.Since(processStart)
 	totalTime := time.Since(start)
-
-	fmt.Println("solution of part1:", part1)
-	fmt.Println("solution of part2:", part2)
-	fmt.Println()
-
-	fmt.Printf("Total bench time:  %d microseconds\n", benchTime.Microseconds())
-	avgUs := float64(benchTime.Nanoseconds()) / 1_000.0/float64(iters)
-	fmt.Printf("Average per iter:  %.4f microseconds\n", avgUs)
-	fmt.Printf("Total time:        %d microseconds\n", totalTime.Microseconds())
+	elapsedUs := float64(processTime.Nanoseconds()) / 1000.0
+	fmt.Printf("Total: %.2f microseconds\n", elapsedUs)
+	fmt.Printf("Average: %.4f microseconds\n", elapsedUs/float64(iters))
+	fmt.Printf("Total time:        %dns\n", totalTime.Nanoseconds())
+	fmt.Println("part1", part1)
+	fmt.Println("part2", part2)
 }

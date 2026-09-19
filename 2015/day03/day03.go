@@ -3,21 +3,20 @@ package main
 import (
 	_ "embed"
 	"fmt"
-	"os"
 	"time"
 )
-
-var DX = [256]int16{'>': 1, '<': -1}
-var DY = [256]int16{'^': 1, 'v': -1}
 
 //go:embed input.txt
 var data []byte
 
+var DX = [256]int16{'>': 1, '<': -1}
+var DY = [256]int16{'^': 1, 'v': -1}
+
 const GRID = 256
-const OFF  = GRID / 2
+const OFF = GRID / 2
 
 func idx(x, y int16) int {
-    return ((int(y)+OFF)<<8) | (int(x) + OFF)
+	return ((int(y) + OFF) << 8) | (int(x) + OFF)
 }
 
 func solve(data []byte) (int, int) {
@@ -71,28 +70,18 @@ func solve(data []byte) (int, int) {
 
 func main() {
 	start := time.Now()
-
-	data, err := os.ReadFile("input.txt")
-	if err != nil {
-		panic(err)
-	}
-
-	part1, part2 := solve(data)
-
 	const iters = 10000
-	benchStart := time.Now()
+	var part1, part2 int
+	processStart := time.Now()
 	for i := 0; i < iters; i++ {
 		part1, part2 = solve(data)
 	}
-	benchTime := time.Since(benchStart)
+	processTime := time.Since(processStart)
 	totalTime := time.Since(start)
-
-	fmt.Println("solution of part 1:", part1)
-	fmt.Println("solution of part 2:", part2)
-	fmt.Println()
-
-	fmt.Printf("Total bench time:  %d microseconds\n", benchTime.Microseconds())
-	fmt.Printf("Average per iter:  %.4f microseconds\n",
-		float64(benchTime.Nanoseconds())/1000.0/float64(iters))
-	fmt.Printf("Total time:        %d microseconds\n", totalTime.Microseconds())
+	elapsedUs := float64(processTime.Nanoseconds()) / 1000.0
+	fmt.Printf("Total: %.2f microseconds\n", elapsedUs)
+	fmt.Printf("Average: %.4f microseconds\n", elapsedUs/float64(iters))
+	fmt.Printf("Total time:        %dns\n", totalTime.Nanoseconds())
+	fmt.Println("part1", part1)
+	fmt.Println("part2", part2)
 }

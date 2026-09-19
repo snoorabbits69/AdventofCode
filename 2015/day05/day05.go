@@ -11,33 +11,6 @@ var data []byte
 
 var badNext = [256]byte{'a': 'b', 'c': 'd', 'p': 'q', 'x': 'y'}
 
-func main() {
-	start := time.Now()
-
-	var part1, part2 int
-	for i := 0; i < 100; i++ {
-		part1, part2 = solve(data)
-	}
-
-	const iters = 10000
-	benchStart := time.Now()
-	for i := 0; i < iters; i++ {
-		part1, part2 = solve(data)
-	}
-
-	benchTime := time.Since(benchStart)
-	totalTime := time.Since(start)
-
-	fmt.Println("solution of part1:", part1)
-	fmt.Println("solution of part2:", part2)
-	fmt.Println()
-
-	fmt.Printf("Total bench time:  %d microseconds\n", benchTime.Microseconds())
-	avgUs := float64(benchTime.Nanoseconds()) / 1_000.0 / float64(iters)
-	fmt.Printf("Average per iter:  %.4f microseconds\n", avgUs)
-	fmt.Printf("Total time:        %d microseconds\n", totalTime.Microseconds())
-}
-
 func solve(data []byte) (int, int) {
 	return part1(data), part2(data)
 }
@@ -176,4 +149,22 @@ func part2(data []byte) int {
 	}
 
 	return nice
+}
+
+func main() {
+	start := time.Now()
+	const iters = 10000
+	var part1, part2 int
+	processStart := time.Now()
+	for i := 0; i < iters; i++ {
+		part1, part2 = solve(data)
+	}
+	processTime := time.Since(processStart)
+	totalTime := time.Since(start)
+	elapsedUs := float64(processTime.Nanoseconds()) / 1000.0
+	fmt.Printf("Total: %.2f microseconds\n", elapsedUs)
+	fmt.Printf("Average: %.4f microseconds\n", elapsedUs/float64(iters))
+	fmt.Printf("Total time:        %dns\n", totalTime.Nanoseconds())
+	fmt.Println("part1", part1)
+	fmt.Println("part2", part2)
 }
