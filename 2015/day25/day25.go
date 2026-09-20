@@ -16,17 +16,26 @@ func index(row, column int) int {
 	return d*(d-1)/2 + column
 }
 
-func solve(row, column int) int {
-	result := firstCode
-	for i := 1; i < index(row, column); i++ {
-		result = result * multiplier % modulus
+func powMod(base, exp int) int {
+	result := 1
+	base %= modulus
+	for exp > 0 {
+		if exp&1 == 1 {
+			result = result * base % modulus
+		}
+		base = base * base % modulus
+		exp >>= 1
 	}
 	return result
 }
 
+func solve(row, column int) int {
+	return firstCode * powMod(multiplier, index(row, column)-1) % modulus
+}
+
 func main() {
 	start := time.Now()
-	const iters = 10
+	const iters = 10000
 	row, column := 2947, 3029
 	var part1 int
 	processStart := time.Now()
