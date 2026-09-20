@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	_ "embed"
 	"fmt"
 	"time"
@@ -9,123 +10,96 @@ import (
 //go:embed input.txt
 var data []byte
 
-type Point struct{ r, c int }
-
-func parse() [][]byte {
-	var result [][]byte
-	start := 0
-
-	for i := 0; i < len(data); i++ {
-		if data[i] == '\n' {
-			row := make([]byte, i-start)
-			copy(row, data[start:i])
-			result = append(result, row)
-			start = i + 1
-		}
-	}
-
-	if start < len(data) {
-		row := make([]byte, len(data)-start)
-		copy(row, data[start:])
-		result = append(result, row)
-	}
-
-	return result
-}
+var (
+	cells []uint8
+	stack []int32
+	rolls []int32
+)
 
 func solve() (int, int) {
+	input := bytes.TrimRight(data, "\r\n")
+	w := bytes.IndexByte(input, '\n')
+	if w < 0 {
+		w = len(input)
+	}
+	if w > 0 && input[w-1] == '\r' {
+		w--
+	}
+	h := bytes.Count(input, []byte{'\n'}) + 1
 
-	grid := parse()
-	height := len(grid)
-	count := 0
+	stride := w + 2
+	size := (h + 2) * stride
+	if cap(cells) < size {
+		cells = make([]uint8, size)
+	}
+	cells = cells[:size]
+	for i := range cells {
+		cells[i] = 128
+	}
 
-	dr := [8]int{-1, -1, -1, 0, 0, 1, 1, 1}
-	dc := [8]int{-1, 0, 1, -1, 1, -1, 0, 1}
+	offs := [8]int{-stride - 1, -stride, -stride + 1, -1, 1, stride - 1, stride, stride + 1}
+
+	rolls = rolls[:0]
+	pos := 0
+	for y := 0; y < h; y++ {
+		line := input[pos:]
+		if i := bytes.IndexByte(line, '\n'); i >= 0 {
+			line = line[:i]
+			pos += i + 1
+		}
+		if n := len(line); n > w {
+			line = line[:w]
+		}
+		base := (y+1)*stride + 1
+		for x, ch := range line {
+			if ch == '@' {
+				cells[base+x] = 0
+				rolls = append(rolls, int32(base+x))
+			}
+		}
+	}
+
+	for _, p := range rolls {
+		for _, o := range offs {
+			cells[int(p)+o]++
+		}
+	}
+
+	stack = stack[:0]
+	for _, p := range rolls {
+		if cells[p] < 4 {
+			stack = append(stack, p)
+		}
+	}
+	part1 := len(stack)
 
 	removed := 0
-
-	for r := 0; r < height; r++ {
-		rowLen := len(grid[r])
-		for c := 0; c < rowLen; c++ {
-			if grid[r][c] != '@' {
-				continue
+	for len(stack) > 0 {
+		p := int(stack[len(stack)-1])
+		stack = stack[:len(stack)-1]
+		removed++
+		for _, o := range offs {
+			n := p + o
+			if cells[n] == 4 {
+				stack = append(stack, int32(n))
 			}
-
-			neighbors := 0
-			for i := 0; i < 8; i++ {
-				rr := r + dr[i]
-				cc := c + dc[i]
-
-				if rr >= 0 && rr < height {
-					if cc >= 0 && cc < len(grid[rr]) {
-						if grid[rr][cc] == '@' {
-							neighbors++
-						}
-					}
-				}
-			}
-
-			if neighbors < 4 {
-				count++
-			}
-
+			cells[n]--
 		}
 	}
-
-	for {
-		accessible := make([]Point, 0)
-
-		for r := 0; r < height; r++ {
-			w := len(grid[r])
-			for c := 0; c < w; c++ {
-				if grid[r][c] != '@' {
-					continue
-				}
-
-				neighbors := 0
-				for i := 0; i < 8; i++ {
-					rr := r + dr[i]
-					cc := c + dc[i]
-					if rr >= 0 && rr < height && cc >= 0 && cc < len(grid[rr]) && grid[rr][cc] == '@' {
-						neighbors++
-					}
-				}
-
-				if neighbors < 4 {
-					accessible = append(accessible, Point{r, c})
-				}
-			}
-		}
-
-		if len(accessible) == 0 {
-			break
-		}
-
-		for _, p := range accessible {
-			if p.c >= 0 && p.c < len(grid[p.r]) && grid[p.r][p.c] == '@' {
-				grid[p.r][p.c] = '.'
-				removed++
-			}
-		}
-	}
-
-	return count, removed
+	return part1, removed
 }
 
 func main() {
-	start := time.Now()
 	const iters = 1000
 	var part1, part2 int
-	processStart := time.Now()
+	start := time.Now()
 	for i := 0; i < iters; i++ {
 		part1, part2 = solve()
 	}
-	processTime := time.Since(processStart)
-	totalTime := time.Since(start)
-	elapsedUs := float64(processTime.Nanoseconds()) / 1000.0
-	fmt.Printf("Total: %.2f microseconds\n", elapsedUs)
-	fmt.Printf("Average: %.4f microseconds\n", elapsedUs/float64(iters))
-	fmt.Printf("Total time:        %dns\n", totalTime.Nanoseconds())
+	elapsed := time.Since(start)
+	us := float64(elapsed.Nanoseconds()) / 1000.0
+	fmt.Printf("Total: %.2f microseconds\n", us)
+	fmt.Printf("Average: %.4f microseconds\n", us/iters)
 	fmt.Println("part1", part1)
 	fmt.Println("part2", part2)
 }
