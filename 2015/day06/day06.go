@@ -267,7 +267,6 @@ func solve(input []byte) (int, int) {
 }
 
 func main() {
-	_ = unsafe.Sizeof(0)
 	start := time.Now()
 	const iters = 100
 	var part1, part2 int
