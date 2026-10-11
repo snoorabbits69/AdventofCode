@@ -3,44 +3,192 @@ package main
 import (
 	_ "embed"
 	"fmt"
+	"math/bits"
+	"runtime"
+	"sync"
+	"sync/atomic"
 	"time"
-	"unsafe"
 )
 
 //go:embed input.txt
 var data []byte
 
 const (
-	W = 1000
-	N = W * W
+	W  = 1000
+	WB = 128
+	WT = 16
+
+	lo01 = 0x0101010101010101
+	lo02 = 0x0202020202020202
+	lo7F = 0x7F7F7F7F7F7F7F7F
+	hi80 = 0x8080808080808080
+	m16  = 0x00FF00FF00FF00FF
+	mul4 = 0x0001000100010001
 )
 
-var (
-	grid1 [N]uint8
-	grid2 [N]uint8
-)
+type instr struct {
+	op       uint8
+	y1, y2   int32
+	bl, bh   int32
+	bml, bmh uint64
+	tl, th   int32
+	tml, tmh uint64
+}
 
-//go:noescape
-//go:linkname memclrNoHeapPointers runtime.memclrNoHeapPointers
-func memclrNoHeapPointers(ptr unsafe.Pointer, n uintptr)
+var instrs [1024]instr
 
-func sumBytes(data []uint8) uint64 {
-	var sum uint64
-	i := 0
-	for ; i+7 < len(data); i += 8 {
-		sum += uint64(data[i]) + uint64(data[i+1]) + uint64(data[i+2]) + uint64(data[i+3]) +
-			uint64(data[i+4]) + uint64(data[i+5]) + uint64(data[i+6]) + uint64(data[i+7])
+type seg struct{ y, h int32 }
+
+type result struct {
+	p1, p2 uint64
+	_      [48]byte
+}
+
+func makeInstr(op uint8, x1, x2, y1, y2 int) instr {
+
+	in := instr{op: op, y1: int32(y1), y2: int32(y2)}
+
+	last := x2 - 1
+	in.bl, in.bh = int32(x1>>3), int32(last>>3)
+	in.bml = ^uint64(0) << (8 * uint(x1&7))
+	in.bmh = ^uint64(0) >> (8 * uint(7-(last&7)))
+	if in.bl == in.bh {
+		in.bml &= in.bmh
+		in.bmh = in.bml
 	}
-	for ; i < len(data); i++ {
-		sum += uint64(data[i])
+
+	in.tl, in.th = int32(x1>>6), int32(last>>6)
+	in.tml = ^uint64(0) << uint(x1&63)
+	in.tmh = ^uint64(0) >> uint(63-(last&63))
+	if in.tl == in.th {
+		in.tml &= in.tmh
+		in.tmh = in.tml
 	}
-	return sum
+	return in
+}
+
+func applyBits(row *[WT]uint64, in *instr) {
+	l, h := in.tl, in.th
+	if l == h {
+		m := in.tml
+		switch in.op {
+		case 0:
+			row[l] |= m
+		case 1:
+			row[l] &^= m
+		default:
+			row[l] ^= m
+		}
+		return
+	}
+	switch in.op {
+	case 0:
+		row[l] |= in.tml
+		for w := l + 1; w < h; w++ {
+			row[w] = ^uint64(0)
+		}
+		row[h] |= in.tmh
+	case 1:
+		row[l] &^= in.tml
+		for w := l + 1; w < h; w++ {
+			row[w] = 0
+		}
+		row[h] &^= in.tmh
+	default:
+		row[l] ^= in.tml
+		for w := l + 1; w < h; w++ {
+			row[w] = ^row[w]
+		}
+		row[h] ^= in.tmh
+	}
+}
+
+func applyBytes(row *[WB]uint64, in *instr) {
+	l, h := in.bl, in.bh
+	switch in.op {
+	case 0:
+		if l == h {
+			row[l] += lo01 & in.bml
+			return
+		}
+		row[l] += lo01 & in.bml
+		for w := l + 1; w < h; w++ {
+			row[w] += lo01
+		}
+		row[h] += lo01 & in.bmh
+	case 2:
+		if l == h {
+			row[l] += lo02 & in.bml
+			return
+		}
+		row[l] += lo02 & in.bml
+		for w := l + 1; w < h; w++ {
+			row[w] += lo02
+		}
+		row[h] += lo02 & in.bmh
+	default:
+
+		if l == h {
+			v := row[l]
+			nz := ((((v & lo7F) + lo7F) | v) & hi80) >> 7
+			row[l] = v - (nz & in.bml)
+			return
+		}
+		v := row[l]
+		nz := ((((v & lo7F) + lo7F) | v) & hi80) >> 7
+		row[l] = v - (nz & in.bml)
+		for w := l + 1; w < h; w++ {
+			v = row[w]
+			nz = ((((v & lo7F) + lo7F) | v) & hi80) >> 7
+			row[w] = v - nz
+		}
+		v = row[h]
+		nz = ((((v & lo7F) + lo7F) | v) & hi80) >> 7
+		row[h] = v - (nz & in.bmh)
+	}
+}
+
+func worker(list []instr, segs []seg, next *atomic.Int32, out *result) {
+	var r1 [WT]uint64
+	var r2 [WB]uint64
+	var p1, p2 uint64
+
+	for {
+		s := int(next.Add(1)) - 1
+		if s >= len(segs) {
+			break
+		}
+		y, h := segs[s].y, segs[s].h
+
+		r1 = [WT]uint64{}
+		r2 = [WB]uint64{}
+		for k := range list {
+			in := &list[k]
+			if y < in.y1 || y >= in.y2 {
+				continue
+			}
+			applyBits(&r1, in)
+			applyBytes(&r2, in)
+		}
+
+		var c1, c2 uint64
+		for _, w := range r1 {
+			c1 += uint64(bits.OnesCount64(w))
+		}
+		for _, v := range r2 {
+			a := (v & m16) + ((v >> 8) & m16)
+			c2 += (a * mul4) >> 48
+		}
+		p1 += c1 * uint64(h)
+		p2 += c2 * uint64(h)
+	}
+
+	out.p1 = p1
+	out.p2 = p2
 }
 
 func solve(input []byte) (int, int) {
-	memclrNoHeapPointers(unsafe.Pointer(&grid1[0]), N)
-	memclrNoHeapPointers(unsafe.Pointer(&grid2[0]), N)
-
+	n := 0
 	i := 0
 	for i < len(input) && input[i] == 't' {
 		if i+6 >= len(input) {
@@ -58,212 +206,64 @@ func solve(input []byte) (int, int) {
 			i += 7
 		}
 
-		if i >= len(input) {
-			break
+		var v [4]int
+		for k := 0; k < 4; k++ {
+			for i < len(input) && (input[i] < '0' || input[i] > '9') {
+				i++
+			}
+			for i < len(input) && input[i] >= '0' && input[i] <= '9' {
+				v[k] = v[k]*10 + int(input[i]-'0')
+				i++
+			}
 		}
-
-		x1 := 0
-		for i < len(input) && input[i] != ',' {
-			x1 = x1*10 + int(input[i]-'0')
-			i++
-		}
-		i++
-		if i >= len(input) {
-			break
-		}
-
-		y1 := 0
-		for i < len(input) && input[i] != ' ' {
-			y1 = y1*10 + int(input[i]-'0')
-			i++
-		}
-		i += 9
-		if i >= len(input) {
-			break
-		}
-
-		x2 := 0
-		for i < len(input) && input[i] != ',' {
-			x2 = x2*10 + int(input[i]-'0')
-			i++
-		}
-		i++
-		if i > len(input) {
-			break
-		}
-
-		y2 := 0
-		for i < len(input) && input[i] >= '0' && input[i] <= '9' {
-			y2 = y2*10 + int(input[i]-'0')
-			i++
-		}
-
 		for i < len(input) && (input[i] == '\n' || input[i] == '\r') {
 			i++
 		}
 
-		width := x2 - x1 + 1
-		height := y2 - y1 + 1
+		instrs[n] = makeInstr(op, v[0], v[2]+1, v[1], v[3]+1)
+		n++
+	}
+	list := instrs[:n]
 
-		for y := 0; y < height; y++ {
-			base := (y1+y)*W + x1
-			x := 0
-			for ; x+15 < width; x += 16 {
-				idx := base + x
-				if op == 0 {
-					grid1[idx] = 1
-					grid1[idx+1] = 1
-					grid1[idx+2] = 1
-					grid1[idx+3] = 1
-					grid1[idx+4] = 1
-					grid1[idx+5] = 1
-					grid1[idx+6] = 1
-					grid1[idx+7] = 1
-					grid1[idx+8] = 1
-					grid1[idx+9] = 1
-					grid1[idx+10] = 1
-					grid1[idx+11] = 1
-					grid1[idx+12] = 1
-					grid1[idx+13] = 1
-					grid1[idx+14] = 1
-					grid1[idx+15] = 1
-					grid2[idx]++
-					grid2[idx+1]++
-					grid2[idx+2]++
-					grid2[idx+3]++
-					grid2[idx+4]++
-					grid2[idx+5]++
-					grid2[idx+6]++
-					grid2[idx+7]++
-					grid2[idx+8]++
-					grid2[idx+9]++
-					grid2[idx+10]++
-					grid2[idx+11]++
-					grid2[idx+12]++
-					grid2[idx+13]++
-					grid2[idx+14]++
-					grid2[idx+15]++
-				} else if op == 1 {
-					grid1[idx] = 0
-					grid1[idx+1] = 0
-					grid1[idx+2] = 0
-					grid1[idx+3] = 0
-					grid1[idx+4] = 0
-					grid1[idx+5] = 0
-					grid1[idx+6] = 0
-					grid1[idx+7] = 0
-					grid1[idx+8] = 0
-					grid1[idx+9] = 0
-					grid1[idx+10] = 0
-					grid1[idx+11] = 0
-					grid1[idx+12] = 0
-					grid1[idx+13] = 0
-					grid1[idx+14] = 0
-					grid1[idx+15] = 0
-					if grid2[idx] > 0 {
-						grid2[idx]--
-					}
-					if grid2[idx+1] > 0 {
-						grid2[idx+1]--
-					}
-					if grid2[idx+2] > 0 {
-						grid2[idx+2]--
-					}
-					if grid2[idx+3] > 0 {
-						grid2[idx+3]--
-					}
-					if grid2[idx+4] > 0 {
-						grid2[idx+4]--
-					}
-					if grid2[idx+5] > 0 {
-						grid2[idx+5]--
-					}
-					if grid2[idx+6] > 0 {
-						grid2[idx+6]--
-					}
-					if grid2[idx+7] > 0 {
-						grid2[idx+7]--
-					}
-					if grid2[idx+8] > 0 {
-						grid2[idx+8]--
-					}
-					if grid2[idx+9] > 0 {
-						grid2[idx+9]--
-					}
-					if grid2[idx+10] > 0 {
-						grid2[idx+10]--
-					}
-					if grid2[idx+11] > 0 {
-						grid2[idx+11]--
-					}
-					if grid2[idx+12] > 0 {
-						grid2[idx+12]--
-					}
-					if grid2[idx+13] > 0 {
-						grid2[idx+13]--
-					}
-					if grid2[idx+14] > 0 {
-						grid2[idx+14]--
-					}
-					if grid2[idx+15] > 0 {
-						grid2[idx+15]--
-					}
-				} else {
-					grid1[idx] ^= 1
-					grid1[idx+1] ^= 1
-					grid1[idx+2] ^= 1
-					grid1[idx+3] ^= 1
-					grid1[idx+4] ^= 1
-					grid1[idx+5] ^= 1
-					grid1[idx+6] ^= 1
-					grid1[idx+7] ^= 1
-					grid1[idx+8] ^= 1
-					grid1[idx+9] ^= 1
-					grid1[idx+10] ^= 1
-					grid1[idx+11] ^= 1
-					grid1[idx+12] ^= 1
-					grid1[idx+13] ^= 1
-					grid1[idx+14] ^= 1
-					grid1[idx+15] ^= 1
-					grid2[idx] += 2
-					grid2[idx+1] += 2
-					grid2[idx+2] += 2
-					grid2[idx+3] += 2
-					grid2[idx+4] += 2
-					grid2[idx+5] += 2
-					grid2[idx+6] += 2
-					grid2[idx+7] += 2
-					grid2[idx+8] += 2
-					grid2[idx+9] += 2
-					grid2[idx+10] += 2
-					grid2[idx+11] += 2
-					grid2[idx+12] += 2
-					grid2[idx+13] += 2
-					grid2[idx+14] += 2
-					grid2[idx+15] += 2
-				}
-			}
-			for ; x < width; x++ {
-				idx := base + x
-				if op == 0 {
-					grid1[idx] = 1
-					grid2[idx]++
-				} else if op == 1 {
-					grid1[idx] = 0
-					if grid2[idx] > 0 {
-						grid2[idx]--
-					}
-				} else {
-					grid1[idx] ^= 1
-					grid2[idx] += 2
-				}
-			}
+	var edge [W + 1]bool
+	edge[0], edge[W] = true, true
+	for k := range list {
+		edge[list[k].y1] = true
+		edge[list[k].y2] = true
+	}
+	segs := make([]seg, 0, 2*n+2)
+	prev := 0
+	for y := 1; y <= W; y++ {
+		if edge[y] {
+			segs = append(segs, seg{int32(prev), int32(y - prev)})
+			prev = y
 		}
 	}
 
-	p1 := int(sumBytes(grid1[:]))
-	p2 := int(sumBytes(grid2[:]))
-	return p1, p2
+	threads := runtime.GOMAXPROCS(0)
+	if threads > len(segs) {
+		threads = len(segs)
+	}
+	results := make([]result, threads)
+	var next atomic.Int32
+
+	var wg sync.WaitGroup
+	for t := 1; t < threads; t++ {
+		wg.Add(1)
+		go func(out *result) {
+			defer wg.Done()
+			worker(list, segs, &next, out)
+		}(&results[t])
+	}
+	worker(list, segs, &next, &results[0])
+	wg.Wait()
+
+	var p1, p2 uint64
+	for t := range results {
+		p1 += results[t].p1
+		p2 += results[t].p2
+	}
+	return int(p1), int(p2)
 }
 
 func main() {

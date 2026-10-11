@@ -2,40 +2,168 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
-func lookAndSay(input string) string {
-	output := make([]byte, 0, len(input)*2)
+const elements = `22 -> H -> H
+13112221133211322112211213322112 -> He -> Hf Pa H Ca Li
+312211322212221121123222112 -> Li -> He
+111312211312113221133211322112211213322112 -> Be -> Ge Ca Li
+1321132122211322212221121123222112 -> B -> Be
+3113112211322112211213322112 -> C -> B
+111312212221121123222112 -> N -> C
+132112211213322112 -> O -> N
+31121123222112 -> F -> O
+111213322112 -> Ne -> F
+123222112 -> Na -> Ne
+3113322112 -> Mg -> Pm Na
+1113222112 -> Al -> Mg
+1322112 -> Si -> Al
+311311222112 -> P -> Ho Si
+1113122112 -> S -> P
+132112 -> Cl -> S
+3112 -> Ar -> Cl
+1112 -> K -> Ar
+12 -> Ca -> K
+3113112221133112 -> Sc -> Ho Pa H Ca Co
+11131221131112 -> Ti -> Sc
+13211312 -> V -> Ti
+31132 -> Cr -> V
+111311222112 -> Mn -> Cr Si
+13122112 -> Fe -> Mn
+32112 -> Co -> Fe
+11133112 -> Ni -> Zn Co
+131112 -> Cu -> Ni
+312 -> Zn -> Cu
+13221133122211332 -> Ga -> Eu Ca Ac H Ca Zn
+31131122211311122113222 -> Ge -> Ho Ga
+11131221131211322113322112 -> As -> Ge Na
+13211321222113222112 -> Se -> As
+3113112211322112 -> Br -> Se
+11131221222112 -> Kr -> Br
+1321122112 -> Rb -> Kr
+3112112 -> Sr -> Rb
+1112133 -> Y -> Sr U
+12322211331222113112211 -> Zr -> Y H Ca Tc
+1113122113322113111221131221 -> Nb -> Er Zr
+13211322211312113211 -> Mo -> Nb
+311322113212221 -> Tc -> Mo
+132211331222113112211 -> Ru -> Eu Ca Tc
+311311222113111221131221 -> Rh -> Ho Ru
+111312211312113211 -> Pd -> Rh
+132113212221 -> Ag -> Pd
+3113112211 -> Cd -> Ag
+11131221 -> In -> Cd
+13211 -> Sn -> In
+3112221 -> Sb -> Pm Sn
+1322113312211 -> Te -> Eu Ca Sb
+311311222113111221 -> I -> Ho Te
+11131221131211 -> Xe -> I
+13211321 -> Cs -> Xe
+311311 -> Ba -> Cs
+11131 -> La -> Ba
+1321133112 -> Ce -> La H Ca Co
+31131112 -> Pr -> Ce
+111312 -> Nd -> Pr
+132 -> Pm -> Nd
+311332 -> Sm -> Pm Ca Zn
+1113222 -> Eu -> Sm
+13221133112 -> Gd -> Eu Ca Co
+3113112221131112 -> Tb -> Ho Gd
+111312211312 -> Dy -> Tb
+1321132 -> Ho -> Dy
+311311222 -> Er -> Ho Pm
+11131221133112 -> Tm -> Er Ca Co
+1321131112 -> Yb -> Tm
+311312 -> Lu -> Yb
+11132 -> Hf -> Lu
+13112221133211322112211213322113 -> Ta -> Hf Pa H Ca W
+312211322212221121123222113 -> W -> Ta
+111312211312113221133211322112211213322113 -> Re -> Ge Ca W
+1321132122211322212221121123222113 -> Os -> Re
+3113112211322112211213322113 -> Ir -> Os
+111312212221121123222113 -> Pt -> Ir
+132112211213322113 -> Au -> Pt
+31121123222113 -> Hg -> Au
+111213322113 -> Tl -> Hg
+123222113 -> Pb -> Tl
+3113322113 -> Bi -> Pm Pb
+1113222113 -> Po -> Bi
+1322113 -> At -> Po
+311311222113 -> Rn -> Ho At
+1113122113 -> Fr -> Rn
+132113 -> Ra -> Fr
+3113 -> Ac -> Ra
+1113 -> Th -> Ac
+13 -> Pa -> Th
+3 -> U -> Pa`
 
-	for i := 0; i < len(input); {
-		count := byte(1)
+const numElements = 92
 
-		for i+int(count) < len(input) && input[i] == input[i+int(count)] {
-			count++
+type element struct {
+	sequence string
+	name     string
+	decay    string
+}
+
+func step(current *[numElements]int, decays [][]int) [numElements]int {
+	var next [numElements]int
+
+	for i, count := range current {
+		if count > 0 {
+			for _, e := range decays[i] {
+				next[e] += count
+			}
 		}
-
-		output = append(output, '0'+count, input[i])
-		i += int(count)
 	}
 
-	return string(output)
+	return next
+}
+
+func length(current *[numElements]int, sizes []int) int {
+	total := 0
+	for i, c := range current {
+		total += c * sizes[i]
+	}
+	return total
 }
 
 func solve(input string) (int, int) {
-	part1 := 0
-	part2 := 0
+	lines := strings.Split(elements, "\n")
+	elems := make([]element, 0, len(lines))
+	for _, line := range lines {
+		parts := strings.SplitN(line, " -> ", 3)
+		elems = append(elems, element{parts[0], parts[1], parts[2]})
+	}
 
-	for i := 1; i <= 50; i++ {
-		input = lookAndSay(input)
+	indices := make(map[string]int, numElements*2)
+	for i, e := range elems {
+		indices[e.sequence] = i
+		indices[e.name] = i
+	}
 
-		if i == 40 {
-			part1 = len(input)
-		}
-		if i == 50 {
-			part2 = len(input)
+	sizes := make([]int, len(elems))
+	decays := make([][]int, len(elems))
+	for i, e := range elems {
+		sizes[i] = len(e.sequence)
+		for _, name := range strings.Fields(e.decay) {
+			decays[i] = append(decays[i], indices[name])
 		}
 	}
+
+	var current [numElements]int
+	current[indices[strings.TrimSpace(input)]] = 1
+
+	for i := 0; i < 40; i++ {
+		current = step(&current, decays)
+	}
+	part1 := length(&current, sizes)
+
+	for i := 0; i < 10; i++ {
+		current = step(&current, decays)
+	}
+	part2 := length(&current, sizes)
 
 	return part1, part2
 }

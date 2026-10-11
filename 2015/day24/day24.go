@@ -11,7 +11,7 @@ import (
 var data []byte
 
 func parse() []int {
-	var nums []int
+	nums := make([]int, 0, 32)
 	v, in := 0, false
 	for _, c := range data {
 		if c >= '0' && c <= '9' {
@@ -28,65 +28,89 @@ func parse() []int {
 	return nums
 }
 
+type solver struct {
+	nums   []int
+	n      int
+	target int
+	groups int
+	best   uint64
+	found  bool
+}
+
+func (s *solver) canSplit(used uint64, g int) bool {
+	if g == 1 {
+		return true
+	}
+	return s.pick(used, 0, 0, 0, g)
+}
+
+func (s *solver) pick(used, cur uint64, idx, sum, g int) bool {
+	if sum == s.target {
+		return s.canSplit(used|cur, g-1)
+	}
+	for i := idx; i < s.n; i++ {
+		v := s.nums[i]
+		if used&(1<<uint(i)) != 0 || sum+v > s.target {
+			continue
+		}
+		if s.pick(used, cur|1<<uint(i), i+1, sum+v, g) {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *solver) choose(start, left, sum int, prod, mask uint64) {
+	if s.found && prod >= s.best {
+		return
+	}
+	if left == 1 {
+		need := s.target - sum
+		lo, hi := start, s.n
+		for lo < hi {
+			m := (lo + hi) >> 1
+			if s.nums[m] > need {
+				lo = m + 1
+			} else {
+				hi = m
+			}
+		}
+		if lo < s.n && s.nums[lo] == need {
+			p := prod * uint64(need)
+			if (!s.found || p < s.best) && s.canSplit(mask|1<<uint(lo), s.groups-1) {
+				s.best, s.found = p, true
+			}
+		}
+		return
+	}
+	for i := start; i <= s.n-left; i++ {
+		v := s.nums[i]
+		if sum+v*left < s.target {
+			break
+		}
+		if sum+v > s.target {
+			continue
+		}
+		s.choose(i+1, left-1, sum+v, prod*uint64(v), mask|1<<uint(i))
+	}
+}
+
 func solution(nums []int, groups int) uint64 {
 	total := 0
 	for _, v := range nums {
 		total += v
 	}
-	target := total / groups
-	n := len(nums)
+	s := solver{nums: nums, n: len(nums), target: total / groups, groups: groups}
 
-	var canSplit func(used uint64, g int) bool
-	var pick func(used, cur uint64, idx, sum, g int) bool
-
-	pick = func(used, cur uint64, idx, sum, g int) bool {
-		if sum == target {
-			return canSplit(used|cur, g-1)
-		}
-		for i := idx; i < n; i++ {
-			if used&(1<<i) != 0 || sum+nums[i] > target {
-				continue
-			}
-			if pick(used, cur|1<<i, i+1, sum+nums[i], g) {
-				return true
-			}
-		}
-		return false
+	k, acc := 0, 0
+	for acc < s.target {
+		acc += nums[k]
+		k++
 	}
-
-	canSplit = func(used uint64, g int) bool {
-		if g == 1 {
-			return true
-		}
-		return pick(used, 0, 0, 0, g)
-	}
-
-	var best uint64
-	found := false
-
-	var choose func(start, left, sum int, prod, mask uint64)
-	choose = func(start, left, sum int, prod, mask uint64) {
-		if left == 0 {
-			if sum != target || (found && prod >= best) {
-				return
-			}
-			if canSplit(mask, groups-1) {
-				best, found = prod, true
-			}
-			return
-		}
-		for i := start; i < n; i++ {
-			if sum+nums[i] > target {
-				continue
-			}
-			choose(i+1, left-1, sum+nums[i], prod*uint64(nums[i]), mask|1<<i)
-		}
-	}
-
-	for k := 1; k <= n; k++ {
-		choose(0, k, 0, 1, 0)
-		if found {
-			return best
+	for ; k <= s.n; k++ {
+		s.choose(0, k, 0, 1, 0)
+		if s.found {
+			return s.best
 		}
 	}
 	return 0
@@ -98,7 +122,7 @@ func solve(nums []int) (uint64, uint64) {
 
 func main() {
 	start := time.Now()
-	const iters = 10
+	const iters = 10000
 	nums := parse()
 	sort.Sort(sort.Reverse(sort.IntSlice(nums)))
 	var part1, part2 uint64
